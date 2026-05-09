@@ -42,9 +42,9 @@ def get_full_ledger():
 @router.get("/account")
 def get_account_ledger(name: str):
     """
-    Returns ledger entries for a specific account category.
+    Returns ledger entries for a specific account category (Flexible Match).
     """
-    account_txns = [t for t in TRANSACTIONS if t["category"] == name]
+    account_txns = [t for t in TRANSACTIONS if name.lower() in t["category"].lower()]
     sorted_txns = sorted(account_txns, key=lambda t: t["date"])
     
     ledger = []

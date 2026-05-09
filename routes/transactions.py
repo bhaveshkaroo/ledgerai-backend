@@ -1,6 +1,6 @@
 """
 LedgerAI - routes/transactions.py
-500 professional corporate transactions for Sharma Textiles Pvt Ltd.
+500+ professional corporate transactions.
 """
 
 from fastapi import APIRouter
@@ -507,7 +507,9 @@ TRANSACTIONS = [
     {'id': 497, 'date': '2026-12-31', 'description': 'Preference dividend declared', 'amount': 58000.0, 'type': 'debit', 'category': 'Preference Dividend'},
     {'id': 498, 'date': '2026-12-31', 'description': 'Preference dividend payable', 'amount': 58000.0, 'type': 'credit', 'category': 'Dividend Payable'},
     {'id': 499, 'date': '2026-12-31', 'description': 'Final year-end closing entry for income accounts', 'amount': 2800000.0, 'type': 'debit', 'category': 'Closing Entry'},
-    {'id': 500, 'date': '2026-12-31', 'description': 'Final year-end closing entry for expense accounts', 'amount': 1980000.0, 'type': 'credit', 'category': 'Closing Entry'}
+    {'id': 500, 'date': '2026-12-31', 'description': 'Final year-end closing entry for expense accounts', 'amount': 1980000.0, 'type': 'credit', 'category': 'Closing Entry'},
+    {'id': 501, 'date': '2026-12-31', 'description': 'Proceeds from sale of long-term investments', 'amount': 450000.0, 'type': 'credit', 'category': 'Investment Redemption'},
+    {'id': 502, 'date': '2026-12-31', 'description': 'Sale of old boiler machinery (Scrap)', 'amount': 85000.0, 'type': 'credit', 'category': 'Asset Disposal'}
 ]
 
 @router.get("/all")
@@ -516,6 +518,4 @@ def get_transactions():
 
 @router.get("/classify")
 def classify_transaction(description: str):
-    if "payment" in description.lower() or "received" in description.lower():
-        return {"category": "Revenue"}
     return {"category": "Miscellaneous"}

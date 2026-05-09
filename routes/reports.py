@@ -76,7 +76,7 @@ def financial_summary():
     client = anthropic.Anthropic(api_key=api_key)
 
     prompt = (
-        "You are a financial advisor for an Indian small business (MSME). "
+        "You are a financial advisor for a small textile trading company based in Mumbai called Sharma Textiles Pvt Ltd. "
         "Here are the current numbers:\n"
         f"Total Revenue: ₹{total_revenue:,.2f}\n"
         f"Total Expenses: ₹{total_expenses:,.2f}\n"

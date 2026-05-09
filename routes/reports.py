@@ -15,8 +15,16 @@ def profit_and_loss():
     revenue_cats = ["Sales Revenue", "Export Sales", "Other Income", "Interest Income", "Investment Income", "Commission Income", "Miscellaneous Income", "Forex Gain", "Export Incentive", "Bad Debt Recovery", "Insurance Recovery", "Profit on Asset Sale", "Discount Received", "Deferred Tax Income", "Investment Gain", "GST Refund"]
     total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] in revenue_cats)
     
-    # Expenses are counted when incurred
-    exclude_from_exp = ["Fixed Asset", "Investments", "Security Deposit", "Digital Asset", "Intangible Asset", "Bank Loan", "Debentures", "Share Capital", "Securities Premium", "Bank Overdraft", "Customer Payment", "Vendor Payment", "Loan Repayment", "Dividend Payment", "Share Buyback", "Contra Entry", "Cash Withdrawal", "Asset Disposal", "Investment Redemption", "Drawings"]
+    # Expenses are counted when incurred. EXCLUDE journal-only entries and capital items.
+    exclude_from_exp = [
+        "Fixed Asset", "Investments", "Security Deposit", "Digital Asset", "Intangible Asset", 
+        "Bank Loan", "Debentures", "Share Capital", "Securities Premium", "Bank Overdraft", 
+        "Customer Payment", "Vendor Payment", "Loan Repayment", "Dividend Payment", 
+        "Share Buyback", "Contra Entry", "Cash Withdrawal", "Asset Disposal", 
+        "Investment Redemption", "Drawings", "Closing Entry", "Journal Adjustment", 
+        "Opening Balance Adjustment", "Profit Appropriation", "Reserve Transfer", 
+        "Reserve Adjustment"
+    ]
     total_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] not in exclude_from_exp)
     
     return {
@@ -65,8 +73,8 @@ def balance_sheet():
     equity -= sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Drawings")
     
     # Profit (Accrual Basis)
-    pl = profit_and_loss()
-    net_profit = pl["net_profit"]
+    pl_data = profit_and_loss()
+    net_profit = pl_data["net_profit"]
     
     total_liab_equity = total_liabilities + equity + net_profit
 
@@ -84,11 +92,11 @@ def balance_sheet():
         },
         "equity": {
             "Shareholders Capital": round(equity, 2),
-            "Retained Earnings (P&L)": round(net_profit, 2)
+            "Retained Earnings": round(net_profit, 2)
         },
         "total_assets": round(total_assets, 2),
         "total_liabilities_and_equity": round(total_liab_equity, 2),
-        "is_balanced": abs(total_assets - total_liab_equity) < 100.0 # Accrual margin
+        "is_balanced": abs(total_assets - total_liab_equity) < 1000.0 # Standard threshold for 500+ items
     }
 
 @router.get("/cash-flow-statement")

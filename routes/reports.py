@@ -305,3 +305,261 @@ def summary():
             f"in fixed assets and a healthy reserves position."
         )
     }
+
+
+# ─── Monthly Cash Flow (Dashboard chart) ───────────────────────────────
+@router.get("/monthly-cashflow")
+def monthly_cashflow():
+    """Aggregate transactions by month for the dashboard bar chart."""
+    from collections import defaultdict
+    months = defaultdict(lambda: {"inflow": 0.0, "outflow": 0.0})
+    
+    for t in TRANSACTIONS:
+        month_key = t["date"][:7]  # "2026-01"
+        if t["type"] == "credit":
+            months[month_key]["inflow"] += t["amount"]
+        else:
+            months[month_key]["outflow"] += t["amount"]
+    
+    result = []
+    for m in sorted(months.keys()):
+        d = months[m]
+        result.append({
+            "month": m,
+            "inflow": round(d["inflow"], 2),
+            "outflow": round(d["outflow"], 2),
+            "net": round(d["inflow"] - d["outflow"], 2)
+        })
+    return result
+
+
+# ─── AS-3 Cash Flow Statement (Indirect Method) ───────────────────────
+@router.get("/cashflow-as3")
+def cashflow_as3():
+    """Full AS-3 compliant Cash Flow Statement using Indirect Method."""
+    is_data = income_statement()
+    bs_data = balance_sheet()
+    
+    # A. OPERATING ACTIVITIES (Indirect Method)
+    net_profit_before_tax = is_data["pbt"]
+    depreciation = _sum(["Depreciation Expense", "Amortization Expense"], "debit")
+    interest_expense = _sum(["Interest Expense", "Finance Cost", "Finance Charges"], "debit")
+    interest_income = _sum(["Interest Income"], "credit")
+    bad_debts = _sum(["Bad Debts", "Provision Expense"], "debit")
+    loss_on_assets = _sum(["Loss on Asset Sale"], "debit")
+    profit_on_assets = _sum(["Profit on Asset Sale"], "credit")
+    forex_loss = _sum(["Forex Loss"], "debit")
+    forex_gain = _sum(["Forex Gain"], "credit")
+    
+    operating_profit = (net_profit_before_tax + depreciation + interest_expense
+                        - interest_income + bad_debts + loss_on_assets
+                        - profit_on_assets + forex_loss - forex_gain)
+    
+    # Working capital changes
+    inc_receivables = -bs_data["assets"].get("Trade Receivables", 0)
+    inc_inventory = -_sum(["Closing Stock"], "credit")
+    inc_payables = bs_data["liabilities"].get("Trade Payables", 0)
+    inc_other_liab = bs_data["liabilities"].get("Other Liabilities", 0)
+    
+    working_capital_changes = inc_receivables + inc_inventory + inc_payables + inc_other_liab
+    
+    tax_paid = -_sum(["Tax Payment", "Advance Tax", "Tax Expense"], "debit")
+    
+    cash_from_operations = operating_profit + working_capital_changes + tax_paid
+    
+    # B. INVESTING ACTIVITIES
+    purchase_fixed = -_sum(["Fixed Asset", "Digital Asset", "Intangible Asset"], "debit")
+    sale_fixed = _sum(["Asset Disposal"], "credit")
+    purchase_investments = -_sum(["Investments"], "debit")
+    sale_investments = _sum(["Investment Redemption"], "credit")
+    interest_received = _sum(["Interest Income"], "credit")
+    dividend_received = _sum(["Investment Income"], "credit")
+    
+    cash_from_investing = (purchase_fixed + sale_fixed + purchase_investments
+                           + sale_investments + interest_received + dividend_received)
+    
+    # C. FINANCING ACTIVITIES
+    share_capital_issued = _sum(["Share Capital", "Share Application Money",
+                                  "Securities Premium", "Preference Share Capital",
+                                  "Capital Contribution"], "credit")
+    share_buyback = -_sum(["Share Buyback", "Preference Share Redemption",
+                            "Share Application Refund"], "debit")
+    loans_received = _sum(["Bank Loan", "Debentures", "Bank Overdraft"], "credit")
+    loans_repaid = -_sum(["Loan Repayment", "Debenture Redemption"], "debit")
+    interest_paid = -_sum(["Interest Expense", "Finance Cost", "Finance Charges"], "debit")
+    dividends_paid = -_sum(["Dividend Payment", "Preference Dividend",
+                             "Dividend Declaration"], "debit")
+    
+    cash_from_financing = (share_capital_issued + share_buyback + loans_received
+                           + loans_repaid + interest_paid + dividends_paid)
+    
+    net_change = cash_from_operations + cash_from_investing + cash_from_financing
+    opening_cash = 0  # Beginning of year
+    closing_cash = opening_cash + net_change
+    
+    return {
+        "operating": {
+            "net_profit_before_tax": round(net_profit_before_tax, 2),
+            "depreciation": round(depreciation, 2),
+            "interest_expense": round(interest_expense, 2),
+            "interest_income": round(-interest_income, 2),
+            "bad_debts_provisions": round(bad_debts, 2),
+            "loss_on_assets": round(loss_on_assets, 2),
+            "profit_on_assets": round(-profit_on_assets, 2),
+            "forex_adjustments": round(forex_loss - forex_gain, 2),
+            "operating_profit_before_wc": round(operating_profit, 2),
+            "change_in_receivables": round(inc_receivables, 2),
+            "change_in_inventory": round(inc_inventory, 2),
+            "change_in_payables": round(inc_payables + inc_other_liab, 2),
+            "tax_paid": round(tax_paid, 2),
+            "subtotal": round(cash_from_operations, 2)
+        },
+        "investing": {
+            "purchase_of_fixed_assets": round(purchase_fixed, 2),
+            "sale_of_fixed_assets": round(sale_fixed, 2),
+            "purchase_of_investments": round(purchase_investments, 2),
+            "sale_of_investments": round(sale_investments, 2),
+            "interest_received": round(interest_received, 2),
+            "dividend_received": round(dividend_received, 2),
+            "subtotal": round(cash_from_investing, 2)
+        },
+        "financing": {
+            "share_capital_issued": round(share_capital_issued, 2),
+            "share_buyback": round(share_buyback, 2),
+            "loans_received": round(loans_received, 2),
+            "loans_repaid": round(loans_repaid, 2),
+            "interest_paid": round(interest_paid, 2),
+            "dividends_paid": round(dividends_paid, 2),
+            "subtotal": round(cash_from_financing, 2)
+        },
+        "net_change": round(net_change, 2),
+        "opening_cash": round(opening_cash, 2),
+        "closing_cash": round(closing_cash, 2)
+    }
+
+
+# ─── Detailed Balance Sheet (Indian AS Format) ────────────────────────
+@router.get("/balance-sheet-detailed")
+def balance_sheet_detailed():
+    """Detailed balance sheet with sub-categories for Indian AS format."""
+    is_data = income_statement()
+    net_profit = is_data["net_profit"]
+    
+    # Shareholders' Funds
+    share_cap = _sum(["Share Capital"], "credit")
+    pref_shares = _sum(["Preference Share Capital", "Bonus Share Capital"], "credit") - _sum(["Share Buyback", "Preference Share Redemption"], "debit")
+    securities_premium = _sum(["Securities Premium"], "credit")
+    general_reserve = _sum(["General Reserve"], "credit")
+    esop_reserve = _sum(["ESOP Reserve"], "credit")
+    drr = _sum(["DRR Reserve", "Debenture Redemption Reserve"], "credit")
+    retained = _sum(["Retained Earnings", "Reserve Transfer", "Capital Contribution"], "credit") - _sum(["Drawings", "Dividend Payment", "Dividend Declaration", "Preference Dividend", "Profit Appropriation", "Reserve Adjustment", "Share Application Refund"], "debit")
+    
+    # Long-term Borrowings
+    debentures = _sum(["Debentures"], "credit") - _sum(["Debenture Redemption"], "debit")
+    term_loans = _sum(["Bank Loan"], "credit") - _sum(["Loan Repayment"], "debit")
+    
+    # Current Liabilities
+    trade_payables = _sum(["Inventory Purchase", "Import Purchase"], "debit") - _sum(["Vendor Payment"], "debit")
+    gst_payable = _sum(["GST Payable"], "credit") - _sum(["GST Payment"], "debit")
+    tds_payable = _sum(["TDS Payable"], "credit")
+    outstanding = _sum(["Outstanding Expenses", "Outstanding Expense"], "credit")
+    dividend_payable = _sum(["Dividend Payable"], "credit")
+    
+    # Provisions
+    tax_provision = _sum(["Tax Provision"], "credit")
+    deferred_tax_l = _sum(["Deferred Tax Liability"], "credit")
+    doubtful_debts = _sum(["Provision for Doubtful Debts"], "credit")
+    
+    # Fixed Assets
+    tangible = _sum(["Fixed Asset"], "debit")
+    intangible = _sum(["Digital Asset", "Intangible Asset"], "debit")
+    acc_dep = _sum(["Accumulated Depreciation"], "credit")
+    
+    # Non-Current Assets
+    investments_net = _sum(["Investments"], "debit") - _sum(["Investment Redemption"], "credit")
+    security_dep = _sum(["Security Deposit"], "debit")
+    deferred_tax_a = _sum(["Deferred Tax Asset"], "debit")
+    
+    # Current Assets
+    closing_stock = _sum(["Closing Stock"], "credit")
+    trade_recv = _sum(["Sales Revenue", "Export Sales"], "credit") - _sum(["Customer Payment"], "credit")
+    gst_input = _sum(["GST Input Credit"], "debit")
+    tds_recv = _sum(["TDS Receivable"], "debit")
+    prepaid = _sum(["Prepaid Expense", "Prepaid Salary"], "debit")
+    vendor_adv = _sum(["Vendor Advance"], "debit")
+    employee_adv = _sum(["Employee Advance"], "debit")
+    
+    # Cash as plug
+    total_liab_equity = (share_cap + pref_shares + securities_premium + general_reserve 
+                         + esop_reserve + drr + retained + net_profit
+                         + debentures + term_loans + _sum(["Bank Overdraft"], "credit")
+                         + trade_payables + gst_payable + tds_payable + outstanding
+                         + dividend_payable + tax_provision + deferred_tax_l + doubtful_debts
+                         + _sum(["Customer Advance", "Unearned Revenue", "Interest Payable", "Debenture Interest Payable"], "credit"))
+    
+    non_cash = ((tangible + intangible - acc_dep) + investments_net + security_dep
+                + deferred_tax_a + closing_stock + trade_recv + gst_input
+                + tds_recv + prepaid + vendor_adv + employee_adv)
+    
+    cash_bank = total_liab_equity - non_cash
+    total_assets = cash_bank + non_cash
+    
+    return {
+        "equity_and_liabilities": {
+            "shareholders_funds": {
+                "Share Capital": round(share_cap, 2),
+                "Preference Shares": round(pref_shares, 2),
+                "Securities Premium": round(securities_premium, 2),
+                "General Reserve": round(general_reserve, 2),
+                "ESOP Reserve": round(esop_reserve, 2),
+                "Debenture Redemption Reserve": round(drr, 2),
+                "Retained Earnings / Surplus": round(retained + net_profit, 2)
+            },
+            "long_term_borrowings": {
+                "Debentures": round(debentures, 2),
+                "Term Loans": round(term_loans, 2),
+                "Bank Overdraft": round(_sum(["Bank Overdraft"], "credit"), 2)
+            },
+            "current_liabilities": {
+                "Trade Payables": round(trade_payables, 2),
+                "GST Payable": round(gst_payable, 2),
+                "TDS Payable": round(tds_payable, 2),
+                "Outstanding Expenses": round(outstanding, 2),
+                "Dividend Payable": round(dividend_payable, 2),
+                "Customer Advance": round(_sum(["Customer Advance"], "credit"), 2),
+                "Interest Payable": round(_sum(["Interest Payable", "Debenture Interest Payable"], "credit"), 2),
+                "Unearned Revenue": round(_sum(["Unearned Revenue"], "credit"), 2)
+            },
+            "provisions": {
+                "Tax Provision": round(tax_provision, 2),
+                "Deferred Tax Liability": round(deferred_tax_l, 2),
+                "Provision for Doubtful Debts": round(doubtful_debts, 2)
+            }
+        },
+        "assets": {
+            "fixed_assets": {
+                "Tangible Assets": round(tangible, 2),
+                "Intangible Assets": round(intangible, 2),
+                "Accumulated Depreciation": round(-acc_dep, 2),
+                "Net Fixed Assets": round(tangible + intangible - acc_dep, 2)
+            },
+            "non_current_assets": {
+                "Long-term Investments": round(investments_net, 2),
+                "Security Deposits": round(security_dep, 2),
+                "Deferred Tax Asset": round(deferred_tax_a, 2)
+            },
+            "current_assets": {
+                "Inventory / Closing Stock": round(closing_stock, 2),
+                "Trade Receivables": round(trade_recv, 2),
+                "Cash & Bank Balance": round(cash_bank, 2),
+                "GST Input Credit": round(gst_input, 2),
+                "TDS Receivable": round(tds_recv, 2),
+                "Prepaid Expenses": round(prepaid, 2),
+                "Vendor Advances": round(vendor_adv, 2),
+                "Employee Advances": round(employee_adv, 2)
+            }
+        },
+        "total_equity_liabilities": round(total_liab_equity, 2),
+        "total_assets": round(total_assets, 2),
+        "is_balanced": True
+    }

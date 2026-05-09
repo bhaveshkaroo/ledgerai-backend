@@ -133,60 +133,50 @@ def trial_balance():
 @router.get("/balance-sheet")
 def balance_sheet():
     """
-    Corporate Balance Sheet: Assets = Liabilities + Equity
+    Mathematical Closed-Loop Balance Sheet:
+    Every transaction is accounted for.
     """
-    # 1. Assets
+    # 1. Total Cash is the net of EVERYTHING
     cash_at_bank = sum(t["amount"] if t["type"] == "credit" else -t["amount"] for t in TRANSACTIONS)
     
-    # Fixed Assets (Everything in Fixed Asset category)
-    fixed_assets_value = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Fixed Asset")
-    
-    # Prepayments (Annual insurance, etc)
+    # 2. Non-Cash Assets
+    fixed_assets = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Fixed Asset")
     prepayments = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Prepayment")
-    
-    total_assets = cash_at_bank + fixed_assets_value + prepayments
+    total_assets = cash_at_bank + fixed_assets + prepayments
 
-    # 2. Liabilities
-    # Term Loans and Debts
-    loans_received = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Received")
-    loans_repaid = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
-    outstanding_loan = loans_received - loans_repaid
-    
-    # Payables (10% of vendor payments)
-    payables = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment") * 0.10
-    
-    total_liabilities = outstanding_loan + payables
+    # 3. Liabilities
+    loans_in = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Received")
+    loans_out = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
+    outstanding_loan = loans_in - loans_out
+    total_liabilities = outstanding_loan
 
-    # 3. Equity
-    initial_capital = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Equity")
+    # 4. Equity & Retained Earnings
+    capital = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Equity")
     
-    # Net Profit = Revenue - Expenses (Exclude Dividends and Assets from Expenses)
-    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] not in ["Equity", "Loan Received", "GST Refund", "Investing Income"])
-    investing_income = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Investing Income")
+    # PROFIT = (All Credits except Capital & Loans) - (All Debits except Assets, Loan Repay, & Dividends)
+    income_cats = ["Revenue", "Investing Income", "GST Refund"]
+    total_income = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] in income_cats)
     
-    excluded_categories = ["Fixed Asset", "Loan Repayment", "Dividend Paid", "Prepayment"]
-    operating_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] not in excluded_categories)
+    expense_exclude = ["Fixed Asset", "Loan Repayment", "Dividend Paid", "Prepayment", "Equity"]
+    total_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] not in expense_exclude)
     
-    # Dividends come out of Retained Earnings
-    dividends_paid = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Dividend Paid")
+    net_profit = total_income - total_expenses
+    dividends = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Dividend Paid")
+    retained_earnings = net_profit - dividends
     
-    net_profit = (total_revenue + investing_income) - operating_expenses
-    retained_earnings = net_profit - dividends_paid
-    
-    total_equity = initial_capital + retained_earnings
+    total_equity = capital + retained_earnings
 
     return {
         "assets": {
             "Cash & Bank Balance": round(cash_at_bank, 2),
-            "Fixed Assets (Plant & Machinery)": round(fixed_assets_value, 2),
-            "Prepayments & Other Assets": round(prepayments, 2)
+            "Fixed Assets": round(fixed_assets, 2),
+            "Pre-paid Assets": round(prepayments, 2)
         },
         "liabilities": {
-            "Long Term Loans": round(outstanding_loan, 2),
-            "Trade Payables": round(payables, 2)
+            "Long Term Debt": round(outstanding_loan, 2)
         },
         "equity": {
-            "Shareholders Capital": round(initial_capital, 2),
+            "Shareholders Capital": round(capital, 2),
             "Retained Earnings": round(retained_earnings, 2)
         },
         "total_assets": round(total_assets, 2),

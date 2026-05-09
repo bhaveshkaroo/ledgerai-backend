@@ -14,6 +14,8 @@ load_dotenv()
 # Import route modules
 from routes.transactions import router as transactions_router
 from routes.reports import router as reports_router
+from routes.ledger import router as ledger_router
+from routes.gst import router as gst_router
 
 # Create the FastAPI application
 app = FastAPI(
@@ -34,6 +36,8 @@ app.add_middleware(
 # Mount the route files
 app.include_router(transactions_router, prefix="/transactions")
 app.include_router(reports_router, prefix="/reports")
+app.include_router(ledger_router, prefix="/ledger")
+app.include_router(gst_router, prefix="/gst")
 
 
 @app.get("/")

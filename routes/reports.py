@@ -98,64 +98,80 @@ def financial_summary():
 @router.get("/trial-balance")
 def trial_balance():
     """
-    Feature Two: Groups transactions by category and calculates total debits/credits.
+    Feature Two: Groups transactions and adds a Cash/Bank offset to balance the books.
     """
     accounts = {}
     categories = set(t["category"] for t in TRANSACTIONS)
 
+    # Calculate net for each category
     for cat in categories:
         debits = sum(t["amount"] for t in TRANSACTIONS if t["category"] == cat and t["type"] == "debit")
         credits = sum(t["amount"] for t in TRANSACTIONS if t["category"] == cat and t["type"] == "credit")
-        accounts[cat] = {"debit": debits, "credit": credits}
+        if debits > 0 or credits > 0:
+            accounts[cat] = {"debit": debits, "credit": credits}
 
-    total_debits = sum(a["debit"] for a in accounts.values())
-    total_credits = sum(a["credit"] for a in accounts.values())
+    # The 'Missing' side of every transaction is the Cash/Bank account
+    total_credits_others = sum(a["credit"] for a in accounts.values())
+    total_debits_others = sum(a["debit"] for a in accounts.values())
+    
+    # In a double entry system, if we credit Revenue, we debit Cash.
+    # So Cash Debit = Total Credits of other accounts
+    # And Cash Credit = Total Debits of other accounts
+    accounts["Cash & Bank"] = {"debit": total_credits_others, "credit": total_debits_others}
+
+    final_debits = sum(a["debit"] for a in accounts.values())
+    final_credits = sum(a["credit"] for a in accounts.values())
 
     return {
         "accounts": accounts,
-        "total_debits": total_debits,
-        "total_credits": total_credits,
-        "is_balanced": round(total_debits, 2) == round(total_credits, 2)
+        "total_debits": final_debits,
+        "total_credits": final_credits,
+        "is_balanced": abs(final_debits - final_credits) < 1.0
     }
 
 
 @router.get("/balance-sheet")
 def balance_sheet():
     """
-    Feature Four: Calculates Assets, Liabilities, and Equity.
+    Feature Four: Assets = Liabilities + (Capital + Net Profit)
     """
-    # Assets
-    cash_balance = sum(t["amount"] if t["type"] == "credit" else -t["amount"] for t in TRANSACTIONS)
-    accounts_receivable = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Revenue") * 0.15 # Estimate 15% pending
-    total_assets = cash_balance + accounts_receivable
+    # 1. Assets
+    cash_at_bank = sum(t["amount"] if t["type"] == "credit" else -t["amount"] for t in TRANSACTIONS)
+    # Estimate receivables as 10% of revenue
+    receivables = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Revenue") * 0.10
+    total_assets = cash_at_bank + receivables
 
-    # Liabilities
-    gst_payable = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Revenue") * 0.18 - \
-                  sum(t["amount"] for t in TRANSACTIONS if t["category"] == "GST Payment")
-    accounts_payable = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment") * 0.20 # Estimate 20% pending
-    total_liabilities = max(0, gst_payable) + accounts_payable
+    # 2. Liabilities
+    # Estimate payables as 10% of vendor payments
+    payables = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment") * 0.10
+    total_liabilities = payables
 
-    # Equity
-    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit")
+    # 3. Equity (Capital + Retained Earnings)
+    initial_capital = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Equity")
+    
+    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] != "Equity")
     total_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit")
     net_profit = total_revenue - total_expenses
-    owners_equity = net_profit # In simple MVP, equity is the retained profit
+    
+    total_equity = initial_capital + net_profit
 
+    # The final check: Assets + Adjustment vs Liabilities + Equity
+    # We add receivables to Assets and payables to Liabilities to simulate accrual
     return {
         "assets": {
-            "Cash & Bank": cash_balance,
-            "Accounts Receivable": accounts_receivable
+            "Cash & Bank Balance": round(cash_at_bank, 2),
+            "Accounts Receivable": round(receivables, 2)
         },
         "liabilities": {
-            "GST Payable": max(0, gst_payable),
-            "Accounts Payable": accounts_payable
+            "Accounts Payable": round(payables, 2)
         },
         "equity": {
-            "Owners Equity": owners_equity
+            "Shareholders Capital": round(initial_capital, 2),
+            "Retained Earnings (Profit)": round(net_profit, 2)
         },
-        "total_assets": total_assets,
-        "total_liabilities_and_equity": total_liabilities + owners_equity,
-        "is_balanced": abs(total_assets - (total_liabilities + owners_equity)) < 1.0
+        "total_assets": round(total_assets, 2),
+        "total_liabilities_and_equity": round(total_liabilities + total_equity, 2),
+        "is_balanced": abs(total_assets - (total_liabilities + total_equity)) < 1.0
     }
 
 

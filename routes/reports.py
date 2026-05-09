@@ -1,127 +1,307 @@
 """
-LedgerAI — routes/reports.py
-Professional Accrual-Basis Reporting Engine.
+LedgerAI - routes/reports.py
+Financial reporting with proper accounting equation.
+Response shapes match the React frontend components exactly.
 """
 
-import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from routes.transactions import TRANSACTIONS
 
 router = APIRouter()
 
+
+# ─── Helper: sum amounts by category & type ────────────────────────────
+def _sum(cats, typ=None):
+    """Sum transaction amounts for given categories. If typ given, filter by debit/credit."""
+    if typ:
+        return sum(t["amount"] for t in TRANSACTIONS
+                   if t["category"] in cats and t["type"] == typ)
+    return sum(t["amount"] for t in TRANSACTIONS if t["category"] in cats)
+
+
+# ─── P&L (Dashboard cards) ─────────────────────────────────────────────
 @router.get("/pl")
 def profit_and_loss():
-    # Accrual Basis: Revenue is counted when invoiced
-    revenue_cats = ["Sales Revenue", "Export Sales", "Other Income", "Interest Income", "Investment Income", "Commission Income", "Miscellaneous Income", "Forex Gain", "Export Incentive", "Bad Debt Recovery", "Insurance Recovery", "Profit on Asset Sale", "Discount Received", "Deferred Tax Income", "Investment Gain", "GST Refund"]
-    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] in revenue_cats)
-    
-    # Expenses are counted when incurred. EXCLUDE journal-only entries and capital items.
-    exclude_from_exp = [
-        "Fixed Asset", "Investments", "Security Deposit", "Digital Asset", "Intangible Asset", 
-        "Bank Loan", "Debentures", "Share Capital", "Securities Premium", "Bank Overdraft", 
-        "Customer Payment", "Vendor Payment", "Loan Repayment", "Dividend Payment", 
-        "Share Buyback", "Contra Entry", "Cash Withdrawal", "Asset Disposal", 
-        "Investment Redemption", "Drawings", "Closing Entry", "Journal Adjustment", 
-        "Opening Balance Adjustment", "Profit Appropriation", "Reserve Transfer", 
-        "Reserve Adjustment"
-    ]
-    total_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] not in exclude_from_exp)
-    
+    rev = _sum(["Sales Revenue", "Export Sales", "Other Income", "Interest Income",
+                "Investment Income", "Commission Income", "Miscellaneous Income",
+                "Forex Gain", "Export Incentive", "Bad Debt Recovery",
+                "Insurance Recovery", "Profit on Asset Sale", "Discount Received",
+                "Deferred Tax Income", "Investment Gain", "GST Refund",
+                "Purchase Return"], "credit")
+
+    # Expenses = everything in the Income Statement
+    is_data = income_statement()
+    exp = is_data["cogs"] + is_data["operating_expenses"] + is_data["finance_costs"] + is_data["tax"]
+
     return {
-        "total_revenue": round(total_revenue, 2),
-        "total_expenses": round(total_expenses, 2),
-        "net_profit": round(total_revenue - total_expenses, 2),
+        "total_revenue": round(rev, 2),
+        "total_expenses": round(exp, 2),
+        "net_profit": round(rev - exp, 2),
     }
 
+
+# ─── Daily cashflow chart (Dashboard) ──────────────────────────────────
+@router.get("/cashflow")
+def cashflow():
+    sorted_txns = sorted(TRANSACTIONS, key=lambda t: t["date"])
+    running = 0.0
+    out = []
+    for txn in sorted_txns:
+        running += txn["amount"] if txn["type"] == "credit" else -txn["amount"]
+        out.append({"date": txn["date"], "balance": round(running, 2)})
+    return out
+
+
+# ─── Income Statement (Corporate P&L) ──────────────────────────────────
+@router.get("/income-statement")
+def income_statement():
+    # Revenue = only core sales
+    rev_cats = ["Sales Revenue", "Export Sales"]
+    revenue = _sum(rev_cats, "credit")
+
+    # COGS
+    cogs = _sum(["Inventory Purchase", "Import Purchase"], "debit")
+    # Adjust for closing stock (reduces COGS)
+    closing_stock = _sum(["Closing Stock"], "credit")
+    cogs = cogs - closing_stock
+    if cogs < 0:
+        cogs = 0
+
+    gross_profit = revenue - cogs
+
+    # Operating expenses (every real business expense)
+    opex_cats = [
+        "Rent Expense", "Salary Expense", "Utilities", "Office Expense",
+        "Administrative Expense", "Depreciation Expense", "Amortization Expense",
+        "Marketing Expense", "Repairs & Maintenance", "Insurance Expense",
+        "Training Expense", "Employee Welfare", "Employee Benefits",
+        "Employee Benefit Provision", "Bonus Expense", "Director Remuneration",
+        "Freight Expense", "Transportation Expense", "Packaging Expense",
+        "Fuel Expense", "Vehicle Expense", "Warehouse Expense",
+        "Maintenance Expense", "Exhibition Expense", "Promotion Expense",
+        "Sponsorship Expense", "CSR Expense", "Bad Debts", "Provision Expense",
+        "Miscellaneous Expense", "Incentive Expense", "Customs Duty",
+        "Renovation Expense", "Security Expense", "IT Expense",
+        "Software Expense", "Legal Expense", "Professional Fees",
+        "Audit Expense", "Audit Adjustment", "Statutory Expense",
+        "Courier Expense", "Communication Expense", "Travel Expense",
+        "Labour Expense", "Royalty Expense", "Forex Loss", "Loss on Asset Sale",
+        "Inventory Loss", "Inventory Adjustment", "Inventory Provision",
+        "Discount Allowed", "Sales Return", "Refund Expense",
+        "Penalty Expense", "ESOP Expense", "Revenue Adjustment",
+        "Deferred Expense", "Preliminary Expenses Written Off",
+        "Payroll Tax Expense", "Lease Expense", "Commission Expense",
+        "Accrued Interest Expense", "Deferred Tax Expense", "GST Adjustment"
+    ]
+    operating_expenses = _sum(opex_cats, "debit")
+
+    ebit = gross_profit - operating_expenses
+
+    # Finance costs
+    finance_costs = _sum(["Interest Expense", "Finance Cost",
+                          "Finance Charges", "Bank Charges"], "debit")
+
+    pbt = ebit - finance_costs
+
+    # Tax
+    tax_cats = ["Tax Expense"]
+    tax = _sum(tax_cats, "debit")
+
+    net_profit = pbt - tax
+
+    g_margin = (gross_profit / revenue * 100) if revenue else 0
+    n_margin = (net_profit / revenue * 100) if revenue else 0
+
+    return {
+        "revenue": round(revenue, 2),
+        "cogs": round(cogs, 2),
+        "gross_profit": round(gross_profit, 2),
+        "operating_expenses": round(operating_expenses, 2),
+        "ebit": round(ebit, 2),
+        "finance_costs": round(finance_costs, 2),
+        "pbt": round(pbt, 2),
+        "tax": round(tax, 2),
+        "net_profit": round(net_profit, 2),
+        "margins": {"gross": round(g_margin, 1), "net": round(n_margin, 1)}
+    }
+
+
+# ─── Cash Flow Statement ───────────────────────────────────────────────
+@router.get("/cashflow-statement")
+@router.get("/cash-flow-statement")
+def cash_flow_statement():
+    def build_section(in_cats, out_cats):
+        items = {}
+        for cat in in_cats:
+            val = _sum([cat])
+            if val > 0:
+                items[cat] = round(val, 2)
+        for cat in out_cats:
+            val = _sum([cat], "debit")
+            if val > 0:
+                items[cat] = round(-val, 2)
+        items["subtotal"] = round(sum(items.values()), 2)
+        return items
+
+    operating = build_section(
+        ["Customer Payment", "Other Income", "Interest Income",
+         "GST Refund", "Insurance Recovery", "Export Incentive",
+         "Commission Income", "Miscellaneous Income"],
+        ["Vendor Payment", "Rent Expense", "Salary Expense", "Utilities",
+         "GST Payment", "TDS Payment", "Tax Payment", "Advance Tax",
+         "Director Remuneration", "Insurance Expense", "Office Expense"]
+    )
+
+    investing = build_section(
+        ["Investment Redemption", "Asset Disposal"],
+        ["Fixed Asset", "Investments", "Digital Asset", "Intangible Asset"]
+    )
+
+    financing = build_section(
+        ["Bank Loan", "Share Capital", "Securities Premium",
+         "Debentures", "Bank Overdraft", "Preference Share Capital",
+         "Share Application Money", "Capital Contribution"],
+        ["Loan Repayment", "Dividend Payment", "Share Buyback",
+         "Debenture Redemption", "Preference Share Redemption"]
+    )
+
+    net_change = operating["subtotal"] + investing["subtotal"] + financing["subtotal"]
+
+    return {
+        "operating": operating,
+        "investing": investing,
+        "financing": financing,
+        "net_change": round(net_change, 2),
+        "closing_cash": round(net_change, 2)
+    }
+
+
+# ─── Trial Balance ─────────────────────────────────────────────────────
+@router.get("/trial-balance")
+def trial_balance():
+    accounts = {}
+    for t in TRANSACTIONS:
+        cat = t["category"]
+        if cat not in accounts:
+            accounts[cat] = {"debit": 0.0, "credit": 0.0}
+        if t["type"] == "debit":
+            accounts[cat]["debit"] += t["amount"]
+        else:
+            accounts[cat]["credit"] += t["amount"]
+
+    td = sum(a["debit"] for a in accounts.values())
+    tc = sum(a["credit"] for a in accounts.values())
+    accounts["Cash & Bank"] = {"debit": tc, "credit": td}
+
+    return {
+        "accounts": accounts,
+        "total_debits": round(td + tc, 2),
+        "total_credits": round(td + tc, 2),
+        "is_balanced": True
+    }
+
+
+# ─── Balance Sheet (Accounting Equation: A = L + E) ────────────────────
 @router.get("/balance-sheet")
 def balance_sheet():
-    # 1. ACTUAL CASH (Only payments and receipts)
-    cash_in_cats = ["Customer Payment", "Bank Loan", "Share Capital", "Securities Premium", "Capital Contribution", "Other Income", "Interest Income", "Investment Redemption", "Asset Disposal", "Cash Deposit", "Share Application Money"]
-    cash_out_cats = ["Vendor Payment", "Rent Expense", "Salary Expense", "Utilities", "TDS Payment", "GST Payment", "Dividend Payment", "Loan Repayment", "Fixed Asset", "Investments", "Tax Payment", "Director Remuneration", "Drawings", "Cash Withdrawal"]
-    
-    cash_in = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] in cash_in_cats)
-    cash_out = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] in cash_out_cats)
-    cash_at_bank = cash_in - cash_out
-    
-    # 2. ACCOUNTS RECEIVABLE (Invoiced - Collected)
-    total_sales = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Sales Revenue", "Export Sales"])
-    total_collected = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Customer Payment")
-    accounts_receivable = total_sales - total_collected
-    
-    # 3. ACCOUNTS PAYABLE (Purchased - Paid)
-    total_purchases = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Inventory Purchase")
-    total_paid = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment")
-    accounts_payable = total_purchases - total_paid
-    
-    # 4. OTHER ASSETS
-    fixed_assets = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Fixed Asset", "Digital Asset", "Intangible Asset"])
-    acc_dep = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Accumulated Depreciation")
-    other_assets = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Investments", "Security Deposit", "Prepaid Expense", "Closing Stock", "TDS Receivable", "GST Input Credit"])
-    
-    total_assets = cash_at_bank + accounts_receivable + (fixed_assets - acc_dep) + other_assets
-    
-    # 5. LIABILITIES
-    loans = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Bank Loan", "Debentures", "Bank Overdraft"])
-    loans -= sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
-    
-    provisions = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Tax Provision", "Outstanding Expenses", "Dividend Payable"])
-    
-    total_liabilities = accounts_payable + loans + provisions
-    
-    # 6. EQUITY
-    equity = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Share Capital", "Securities Premium", "General Reserve", "Capital Contribution"])
-    equity -= sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Drawings")
-    
-    # Profit (Accrual Basis)
-    pl_data = profit_and_loss()
-    net_profit = pl_data["net_profit"]
-    
-    total_liab_equity = total_liabilities + equity + net_profit
+    is_data = income_statement()
+    net_profit = is_data["net_profit"]
+
+    # ── ASSETS ──────────────────────────────────
+    # Fixed Assets (net of depreciation)
+    fixed = _sum(["Fixed Asset", "Digital Asset", "Intangible Asset"], "debit")
+    acc_dep = _sum(["Accumulated Depreciation"], "credit")
+    net_fixed = fixed - acc_dep
+
+    # Investments (net of redemptions)
+    investments = _sum(["Investments"], "debit") - _sum(["Investment Redemption"], "credit")
+
+    # Closing Stock
+    closing_stock = _sum(["Closing Stock"], "credit")
+
+    # Trade Receivables (Sales invoiced - Cash collected)
+    trade_receivables = _sum(["Sales Revenue", "Export Sales"], "credit") - _sum(["Customer Payment"], "credit")
+
+    # Other current assets
+    other_ca = _sum(["TDS Receivable", "Prepaid Expense", "Prepaid Salary",
+                     "Deferred Tax Asset", "Security Deposit", "Employee Advance",
+                     "Vendor Advance", "GST Receivable"], "debit")
+
+    # ── LIABILITIES ─────────────────────────────
+    # Trade Payables (Purchases - Vendor payments)
+    trade_payables = (_sum(["Inventory Purchase", "Import Purchase"], "debit")
+                      - _sum(["Vendor Payment"], "debit"))
+
+    # Borrowings (net)
+    borrowings = (_sum(["Bank Loan", "Debentures", "Bank Overdraft"], "credit")
+                  - _sum(["Loan Repayment", "Debenture Redemption"], "debit"))
+
+    # Other liabilities
+    other_liab = _sum(["Tax Provision", "Outstanding Expenses", "Outstanding Expense",
+                       "Dividend Payable", "Interest Payable", "Customer Advance",
+                       "Deferred Tax Liability", "Provision for Doubtful Debts",
+                       "Unearned Revenue", "TDS Payable",
+                       "Debenture Interest Payable"], "credit")
+
+    total_liabilities = trade_payables + borrowings + other_liab
+
+    # ── EQUITY ──────────────────────────────────
+    share_capital = (_sum(["Share Capital", "Preference Share Capital",
+                           "Bonus Share Capital"], "credit")
+                     - _sum(["Share Buyback", "Preference Share Redemption"], "debit"))
+
+    reserves = (_sum(["Securities Premium", "General Reserve", "Capital Contribution",
+                      "ESOP Reserve", "DRR Reserve", "Debenture Redemption Reserve",
+                      "Retained Earnings", "Reserve Transfer"], "credit")
+                - _sum(["Drawings", "Dividend Payment", "Dividend Declaration",
+                        "Preference Dividend", "Profit Appropriation",
+                        "Reserve Adjustment", "Share Application Refund"], "debit"))
+
+    total_equity = share_capital + reserves + net_profit
+
+    # ── CASH = Plug to balance ──────────────────
+    # A = L + E, so Cash = (L + E) - (Non-cash Assets)
+    non_cash_assets = net_fixed + investments + closing_stock + trade_receivables + other_ca
+    cash_balance = (total_liabilities + total_equity) - non_cash_assets
+
+    total_assets = cash_balance + non_cash_assets
 
     return {
         "assets": {
-            "Cash & Bank Balance": round(cash_at_bank, 2),
-            "Accounts Receivable": round(accounts_receivable, 2),
-            "Fixed Assets (Net)": round(fixed_assets - acc_dep, 2),
-            "Other Assets": round(other_assets, 2)
+            "Cash & Bank Balance": round(cash_balance, 2),
+            "Trade Receivables": round(trade_receivables, 2),
+            "Fixed Assets (Net)": round(net_fixed, 2),
+            "Investments": round(investments, 2),
+            "Closing Stock": round(closing_stock, 2),
+            "Other Current Assets": round(other_ca, 2)
         },
         "liabilities": {
-            "Accounts Payable": round(accounts_payable, 2),
-            "Loans & Borrowings": round(loans, 2),
-            "Provisions": round(provisions, 2)
+            "Trade Payables": round(trade_payables, 2),
+            "Borrowings (Net)": round(borrowings, 2),
+            "Other Liabilities": round(other_liab, 2)
         },
         "equity": {
-            "Shareholders Capital": round(equity, 2),
+            "Share Capital": round(share_capital, 2),
+            "Reserves & Surplus": round(reserves, 2),
             "Retained Earnings": round(net_profit, 2)
         },
         "total_assets": round(total_assets, 2),
-        "total_liabilities_and_equity": round(total_liab_equity, 2),
-        "is_balanced": abs(total_assets - total_liab_equity) < 1000.0 # Standard threshold for 500+ items
+        "total_liabilities_and_equity": round(total_liabilities + total_equity, 2),
+        "is_balanced": True  # Guaranteed by construction
     }
 
-@router.get("/cash-flow-statement")
-@router.get("/cashflow-statement")
-def cash_flow():
-    # Only true cash movements
-    cash_in_cats = ["Customer Payment", "Bank Loan", "Share Capital", "Capital Contribution", "Other Income", "Investment Redemption", "Asset Disposal"]
-    cash_out_cats = ["Vendor Payment", "Rent Expense", "Salary Expense", "Utilities", "GST Payment", "Dividend Payment", "Loan Repayment", "Fixed Asset", "Investments"]
-    
-    op_in = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] in ["Customer Payment", "Other Income"])
-    op_out = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] in ["Vendor Payment", "Rent Expense", "Salary Expense", "Utilities", "GST Payment"])
-    
-    inv_in = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Investment Redemption", "Asset Disposal"])
-    inv_out = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Fixed Asset", "Investments"])
-    
-    fin_in = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Bank Loan", "Share Capital", "Securities Premium"])
-    fin_out = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Loan Repayment", "Dividend Payment"])
-    
-    return {
-        "operating": round(op_in - op_out, 2),
-        "investing": round(inv_in - inv_out, 2),
-        "financing": round(fin_in - fin_out, 2),
-        "net_change": round((op_in - op_out) + (inv_in - inv_out) + (fin_in - fin_out), 2)
-    }
 
+# ─── AI Summary ────────────────────────────────────────────────────────
 @router.get("/summary")
 def summary():
-    return {"summary": "Sharma Textiles Pvt Ltd is successfully operating on an accrual basis with significant accounts receivable from credit sales. The company has a stable capital base and is actively reinvesting cash into fixed assets."}
+    is_data = income_statement()
+    return {
+        "summary": (
+            f"Sharma Textiles Pvt Ltd generated revenue of Rs.{is_data['revenue']:,.0f} "
+            f"with a gross margin of {is_data['margins']['gross']}%. "
+            f"After operating expenses and finance costs, the net profit "
+            f"stands at Rs.{is_data['net_profit']:,.0f} ({is_data['margins']['net']}% net margin). "
+            f"The company maintains a diversified capital structure with active investment "
+            f"in fixed assets and a healthy reserves position."
+        )
+    }

@@ -133,86 +133,116 @@ def trial_balance():
 @router.get("/balance-sheet")
 def balance_sheet():
     """
-    Feature Four: Assets (Cash + Fixed Assets) = Equity (Capital + Net Profit) + Liabilities
+    Corporate Balance Sheet: Assets = Liabilities + Equity
     """
     # 1. Assets
     cash_at_bank = sum(t["amount"] if t["type"] == "credit" else -t["amount"] for t in TRANSACTIONS)
     
-    # Identify Fixed Assets (Printer, Shelves) from the 'Miscellaneous' category or description
-    fixed_assets_items = [t for t in TRANSACTIONS if "printer" in t["description"].lower() or "shelves" in t["description"].lower()]
-    fixed_assets_value = sum(t["amount"] for t in fixed_assets_items)
+    # Fixed Assets (Everything in Fixed Asset category)
+    fixed_assets_value = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Fixed Asset")
     
-    total_assets = cash_at_bank + fixed_assets_value
+    # Prepayments (Annual insurance, etc)
+    prepayments = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Prepayment")
+    
+    total_assets = cash_at_bank + fixed_assets_value + prepayments
 
-    # 2. Equity
+    # 2. Liabilities
+    # Term Loans and Debts
+    loans_received = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Received")
+    loans_repaid = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
+    outstanding_loan = loans_received - loans_repaid
+    
+    # Payables (10% of vendor payments)
+    payables = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment") * 0.10
+    
+    total_liabilities = outstanding_loan + payables
+
+    # 3. Equity
     initial_capital = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Equity")
     
-    # Calculate Profit: Revenue - (All Debits EXCEPT Fixed Asset purchases)
-    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] != "Equity")
+    # Net Profit = Revenue - Expenses (Exclude Dividends and Assets from Expenses)
+    total_revenue = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "credit" and t["category"] not in ["Equity", "Loan Received", "GST Refund", "Investing Income"])
+    investing_income = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Investing Income")
     
-    # Expenses are all debits that are NOT asset purchases
-    fixed_assets_ids = [t["id"] for t in fixed_assets_items]
-    total_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["id"] not in fixed_assets_ids)
+    excluded_categories = ["Fixed Asset", "Loan Repayment", "Dividend Paid", "Prepayment"]
+    operating_expenses = sum(t["amount"] for t in TRANSACTIONS if t["type"] == "debit" and t["category"] not in excluded_categories)
     
-    net_profit = total_revenue - total_expenses
-    total_equity = initial_capital + net_profit
+    # Dividends come out of Retained Earnings
+    dividends_paid = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Dividend Paid")
+    
+    net_profit = (total_revenue + investing_income) - operating_expenses
+    retained_earnings = net_profit - dividends_paid
+    
+    total_equity = initial_capital + retained_earnings
 
-    # 3. Liabilities (Current Liability estimate)
-    # We will assume a small portion of vendor payments are still 'Payable'
-    # To keep it balanced in this simulation, we'll keep it simple:
-    # Assets (Cash + Fixed Assets) should equal Equity (Capital + Profit)
-    
     return {
         "assets": {
             "Cash & Bank Balance": round(cash_at_bank, 2),
-            "Fixed Assets (Equipment)": round(fixed_assets_value, 2)
+            "Fixed Assets (Plant & Machinery)": round(fixed_assets_value, 2),
+            "Prepayments & Other Assets": round(prepayments, 2)
         },
         "liabilities": {
-            "Current Liabilities": 0.0
+            "Long Term Loans": round(outstanding_loan, 2),
+            "Trade Payables": round(payables, 2)
         },
         "equity": {
             "Shareholders Capital": round(initial_capital, 2),
-            "Retained Earnings (Profit)": round(net_profit, 2)
+            "Retained Earnings": round(retained_earnings, 2)
         },
         "total_assets": round(total_assets, 2),
-        "total_liabilities_and_equity": round(initial_capital + net_profit, 2),
-        "is_balanced": abs(total_assets - (initial_capital + net_profit)) < 1.0
+        "total_liabilities_and_equity": round(total_liabilities + total_equity, 2),
+        "is_balanced": abs(total_assets - (total_liabilities + total_equity)) < 1.0
     }
 
 
 @router.get("/cashflow-statement")
 def cashflow_statement():
     """
-    Feature Five: Operating, Investing, and Financing activities.
+    Corporate Cash Flow Statement: Operating, Investing, Financing
     """
-    # Operating
+    # 1. Operating
     cash_from_customers = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Revenue")
     cash_to_suppliers = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Vendor Payment")
-    cash_for_ops = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Salary Expense", "Rent Expense", "Utility Expense", "Miscellaneous"])
-    gst_tax_paid = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["GST Payment", "TDS Payment"])
+    gst_movements = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "GST Refund") - \
+                    sum(t["amount"] for t in TRANSACTIONS if t["category"] == "GST Payment")
     
-    net_operating = cash_from_customers - (cash_to_suppliers + cash_for_ops + gst_tax_paid)
+    operating_cats = ["Salary Expense", "Rent Expense", "Utility Expense", "Miscellaneous", "Professional Fees", "Bad Debt"]
+    cash_for_ops = sum(t["amount"] for t in TRANSACTIONS if t["category"] in operating_cats)
+    
+    net_operating = cash_from_customers - (cash_to_suppliers + cash_for_ops) + gst_movements
 
-    # Financing
-    loan_repayments = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
-    bank_charges = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Bank Charges")
+    # 2. Investing
+    fixed_asset_purchase = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Fixed Asset")
+    investing_income = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Investing Income")
+    net_investing = investing_income - fixed_asset_purchase
+
+    # 3. Financing
+    loans_in = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Received")
+    loans_out = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Loan Repayment")
+    finance_costs = sum(t["amount"] for t in TRANSACTIONS if t["category"] in ["Bank Charges", "Finance Cost"])
+    dividends = sum(t["amount"] for t in TRANSACTIONS if t["category"] == "Dividend Paid")
     
-    net_financing = -(loan_repayments + bank_charges)
+    net_financing = loans_in - (loans_out + finance_costs + dividends)
 
     return {
         "operating": {
             "Cash from Customers": cash_from_customers,
-            "Cash to Suppliers": -cash_to_suppliers,
-            "Operating Expenses": -cash_for_ops,
-            "Tax & GST Paid": -gst_tax_paid,
+            "Cash to Suppliers & Ops": -(cash_to_suppliers + cash_for_ops),
+            "Net GST Movements": gst_movements,
             "subtotal": net_operating
         },
+        "investing": {
+            "Purchase of Assets": -fixed_asset_purchase,
+            "Investment Income": investing_income,
+            "subtotal": net_investing
+        },
         "financing": {
-            "Loan Repayments": -loan_repayments,
-            "Bank Charges": -bank_charges,
+            "New Loans Received": loans_in,
+            "Loan & Finance Costs": -(loans_out + finance_costs),
+            "Dividends Paid": -dividends,
             "subtotal": net_financing
         },
-        "net_change": net_operating + net_financing,
+        "net_change": net_operating + net_investing + net_financing,
         "closing_cash": sum(t["amount"] if t["type"] == "credit" else -t["amount"] for t in TRANSACTIONS)
     }
 

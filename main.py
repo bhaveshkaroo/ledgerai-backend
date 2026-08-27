@@ -1,5 +1,5 @@
 """
-LedgerAI Backend — main.py
+LedgerAI Backend - main.py
 Entry point for the FastAPI application.
 Sets up CORS, loads environment variables, and mounts route files.
 """
@@ -13,11 +13,12 @@ from middleware.auth_middleware import auth_middleware
 load_dotenv()
 
 # Import route modules
-from routes.transactions import router as transactions_router
-from routes.reports import router as reports_router
-from routes.ledger import router as ledger_router
-from routes.gst import router as gst_router
-from routes.compliance import router as compliance_router
+from routes import transactions
+from routes import reports
+from routes import ledger
+from routes import gst
+from routes import compliance
+from routes import ai_entry
 
 # Create the FastAPI application
 app = FastAPI(
@@ -41,14 +42,14 @@ async def add_auth_middleware(request: Request, call_next):
     return await auth_middleware(request, call_next)
 
 # Mount the route files
-app.include_router(transactions_router, prefix="/transactions")
-app.include_router(reports_router, prefix="/reports")
-app.include_router(ledger_router, prefix="/ledger")
-app.include_router(gst_router, prefix="/gst")
-app.include_router(compliance_router, prefix="/compliance")
-
+app.include_router(transactions.router, prefix="/api/transactions", tags=["Transactions"])
+app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(compliance.router, prefix="/api/compliance", tags=["Compliance"])
+app.include_router(gst.router, prefix="/api/gst", tags=["GST"])
+app.include_router(ledger.router, prefix="/api/ledger", tags=["Ledger"])
+app.include_router(ai_entry.router, prefix="/api/ai", tags=["AI"])
 
 @app.get("/")
 def root():
-    """Health-check endpoint — confirms the server is running."""
+    """Health-check endpoint"""
     return {"message": "LedgerAI is running"}

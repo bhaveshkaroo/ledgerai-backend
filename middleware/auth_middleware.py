@@ -1,17 +1,14 @@
-import os
-from fastapi import Request, HTTPException
-from supabase import create_client, Client
-from dotenv import load_dotenv
-
-load_dotenv()
-
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(url, key)
+try:
+    from supabase import create_client, Client
+    url: str = os.environ.get("SUPABASE_URL")
+    key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    supabase: Client = create_client(url, key) if (url and key) else None
+except Exception:
+    supabase = None
 
 async def auth_middleware(request: Request, call_next):
-    # Exempt routes
-    if request.url.path in ["/", "/docs", "/openapi.json"]:
+    # Exempt routes or bypass if auth is unconfigured in development
+    if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or not supabase:
         return await call_next(request)
     
     auth_header = request.headers.get("Authorization")

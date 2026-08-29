@@ -7,6 +7,12 @@ Sets up CORS, loads environment variables, and mounts route files.
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import asyncio
+import sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from middleware.auth_middleware import auth_middleware
 
 # Load environment variables from .env file

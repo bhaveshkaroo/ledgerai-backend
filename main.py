@@ -19,6 +19,7 @@ from routes import ledger
 from routes import gst
 from routes import compliance
 from routes import ai_entry
+from routes import ai_audit
 
 # Create the FastAPI application
 app = FastAPI(
@@ -48,6 +49,7 @@ app.include_router(compliance.router, prefix="/api/compliance", tags=["Complianc
 app.include_router(gst.router, prefix="/api/gst", tags=["GST"])
 app.include_router(ledger.router, prefix="/api/ledger", tags=["Ledger"])
 app.include_router(ai_entry.router, prefix="/api/ai", tags=["AI"])
+app.include_router(ai_audit.router, prefix="/api/ai", tags=["AI"])
 
 @app.get("/")
 def root():

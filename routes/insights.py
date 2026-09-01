@@ -43,6 +43,7 @@ SYSTEM_INSTRUCTION_L1 = """You are a senior financial analyst and CFO for an Ind
 Your role is to analyze the user's financial context and provide strategic, actionable insights answering their question.
 Format your answer clearly using bullet points and appropriate financial terminology.
 Always use the financial data provided in the context to support your analysis.
+Always format currency figures in Indian Rupees with the standard ₹ symbol and INR numbering (e.g. ₹2,01,24,000 or ₹2.01 Cr). Never use dollar signs ($) or USD references.
 Always append this exact disclaimer at the very end of your response: "⚠️ This is an AI-generated analysis based on current ledger data. Please consult a qualified financial advisor before making strategic decisions."
 """
 
@@ -55,6 +56,7 @@ Your capabilities & rules:
 4. **Non-Guaranteed Estimates**: Projections must always be labeled as statistical estimates based on historical run-rates, not guarantees.
 5. **Data Limitation Guardrail**: If historical data is insufficient for a window, explicitly highlight the data boundary rather than extrapolating blindly.
 6. **Strictly Advisory-Only**: Never offer, trigger, or suggest modifying or posting to the ledger.
+7. **Strict INR Currency Formatting**: Always use Indian Rupees (₹) and Indian numbering format (e.g. ₹2,01,24,000, ₹33.88 Lakh, ₹2.01 Cr). NEVER use dollar signs ($) or USD terms.
 
 Format with clean markdown headers and bullet points.
 Always append this exact disclaimer at the very end of your response: "⚠️ This is an AI-generated analysis based on current ledger data. Please consult a qualified financial advisor before making strategic decisions."
@@ -72,10 +74,12 @@ Your capabilities & rules:
 3. **Automated Red-Flag Diagnostics**: Review active red flags (e.g., DSO expansion, margin compression, leverage spikes) and explain the root cause chain.
 4. **Contextual Benchmarks**: Provide clearly-labeled generic SME benchmarks for perspective.
 5. **Strictly Advisory-Only**: Never offer, trigger, or suggest modifying or posting to the ledger.
+6. **Strict INR Currency Formatting**: Always use Indian Rupees (₹) and Indian numbering format (e.g. ₹2,01,24,000, ₹33.88 Lakh, ₹2.01 Cr). NEVER use dollar signs ($) or USD terms.
 
 Format with structured executive sections.
 Always append this exact disclaimer at the very end of your response: "⚠️ This is an AI-generated analysis based on current ledger data. Please consult a qualified financial advisor before making strategic decisions."
 """
+
 
 PRIMARY_MODEL = "gemini-3.6-flash"
 FALLBACK_MODEL = "gemini-3.5-flash"

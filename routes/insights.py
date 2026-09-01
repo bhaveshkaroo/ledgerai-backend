@@ -82,65 +82,72 @@ FALLBACK_MODEL = "gemini-3.5-flash"
 
 async def call_gemini_generic(prompt: str, system_instruction: str, api_key: str) -> str:
     """
-    Calls Gemini API using curl.exe subprocess with model fallback.
+    Calls Gemini API using curl.exe with temp payload file and automatic fallback across models.
     """
+    import tempfile
+    import uuid
+
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "systemInstruction": {"parts": [{"text": system_instruction}]},
         "generationConfig": {"responseMimeType": "text/plain", "temperature": 0.3}
     }
-    payload_json = json.dumps(payload)
+    
+    # Use unique temp file to avoid race conditions and handle any payload size/escaping
+    temp_dir = os.path.dirname(__file__)
+    temp_path = os.path.join(temp_dir, f"_req_{uuid.uuid4().hex}.json")
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
 
-    for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    try:
+        for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
-        proc = await asyncio.create_subprocess_exec(
-            "curl.exe", "-s", "-X", "POST", url,
-            "-H", "Content-Type: application/json",
-            "-d", payload_json,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+            proc = await asyncio.create_subprocess_exec(
+                "curl.exe", "-s", "-X", "POST", url,
+                "-H", "Content-Type: application/json",
+                "-d", f"@{temp_path}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
 
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25.0)
-        except asyncio.TimeoutError:
-            proc.kill()
-            continue
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                continue
 
-        if not stdout:
-            continue
+            if not stdout:
+                continue
 
-        try:
-            res_data = json.loads(stdout.decode("utf-8"))
-        except Exception:
-            continue
+            try:
+                res_data = json.loads(stdout.decode("utf-8"))
+            except Exception:
+                continue
 
-        if "error" in res_data:
-            err = res_data["error"]
-            code = err.get("code", 500)
-            if code == 429:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="AI Insights rate limit reached — please try again shortly."
-                )
-            elif code in [400, 401, 403]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="AI Insights authentication error — please verify API key."
-                )
-            continue
+            if "error" in res_data:
+                err = res_data["error"]
+                code = err.get("code", 500)
+                # On 429 or 503, continue loop to fallback model
+                continue
 
-        candidates = res_data.get("candidates", [])
-        if candidates and "content" in candidates[0]:
-            parts = candidates[0]["content"].get("parts", [])
-            if parts and "text" in parts[0]:
-                return parts[0]["text"]
+            candidates = res_data.get("candidates", [])
+            if candidates and "content" in candidates[0]:
+                parts = candidates[0]["content"].get("parts", [])
+                if parts and "text" in parts[0]:
+                    return parts[0]["text"]
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
 
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail="AI Insights service unavailable — please try again."
     )
+
 
 # ── ROUTES ──────────────────────────────────────────────────────────────────
 

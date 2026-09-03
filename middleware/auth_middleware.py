@@ -1,13 +1,20 @@
+import os
+from fastapi import Request, HTTPException
+
 try:
     from supabase import create_client, Client
     url: str = os.environ.get("SUPABASE_URL")
-    key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    # In demo phase, SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY is used
+    key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
     supabase: Client = create_client(url, key) if (url and key) else None
 except Exception:
     supabase = None
 
 async def auth_middleware(request: Request, call_next):
-    # Exempt routes or bypass if auth is unconfigured in development
+    # AUTH POLICY DECISION:
+    # In this investor demo phase (single-company prototype), unauthenticated requests are
+    # allowed through so demo users can explore without required login ceremonies.
+    # When upgrading to multi-tenant production, strict token validation must be enabled here.
     if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or not supabase:
         return await call_next(request)
     

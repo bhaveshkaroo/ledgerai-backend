@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import asyncio
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,13 @@ Return ONLY a valid JSON object with this schema:
 }
 """
 
-PRIMARY_MODEL = "gemini-3.6-flash"
-FALLBACK_MODEL = "gemini-3.5-flash"
+VERIFIED_MODELS = [
+    "gemini-3.7-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest"
+]
 
 async def call_gemini_audit(prompt: str, api_key: str) -> dict:
     """
@@ -71,7 +76,7 @@ async def call_gemini_audit(prompt: str, api_key: str) -> dict:
 
     payload_json = json.dumps(payload)
 
-    for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
+    for model in VERIFIED_MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
         proc = await asyncio.create_subprocess_exec(

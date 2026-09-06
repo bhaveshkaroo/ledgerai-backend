@@ -3,7 +3,7 @@ import json
 import logging
 import asyncio
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -60,8 +60,13 @@ Return ONLY a valid JSON object matching this schema:
 }
 """
 
-PRIMARY_MODEL = "gemini-3.6-flash"
-FALLBACK_MODEL = "gemini-3.5-flash"
+VERIFIED_MODELS = [
+    "gemini-3.7-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest"
+]
 
 async def call_gemini_api(prompt: str, api_key: str) -> dict:
     """
@@ -88,7 +93,7 @@ async def call_gemini_api(prompt: str, api_key: str) -> dict:
 
     payload_json = json.dumps(payload)
 
-    for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
+    for model in VERIFIED_MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         
         proc = await asyncio.create_subprocess_exec(
@@ -141,12 +146,12 @@ async def call_gemini_api(prompt: str, api_key: str) -> dict:
     )
 
 @router.post("/suggest-entry", response_model=SuggestedEntry)
-async def suggest_entry(entry: TransactionDescription):
+async def suggest_entry(entry: TransactionDescription, request: Request):
     """
     AI-Powered Manual Entry System using real Gemini API.
     Parses natural language into a suggested double-entry journal posting.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = request.headers.get("x-gemini-api-key") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

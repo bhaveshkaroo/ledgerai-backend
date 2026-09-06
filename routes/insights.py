@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import asyncio
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from routes.transactions import TRANSACTIONS
@@ -81,8 +81,13 @@ Always append this exact disclaimer at the very end of your response: "⚠️ Th
 """
 
 
-PRIMARY_MODEL = "gemini-3.6-flash"
-FALLBACK_MODEL = "gemini-3.5-flash"
+VERIFIED_MODELS = [
+    "gemini-3.7-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest"
+]
 
 async def call_gemini_generic(prompt: str, system_instruction: str, api_key: str) -> str:
     """
@@ -104,7 +109,7 @@ async def call_gemini_generic(prompt: str, system_instruction: str, api_key: str
         json.dump(payload, f)
 
     try:
-        for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
+        for model in VERIFIED_MODELS:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
             proc = await asyncio.create_subprocess_exec(
@@ -160,9 +165,9 @@ def health_check():
     return {'status': 'healthy', 'module': 'insights', 'levels': ['level1', 'level2', 'level3']}
 
 @router.post('/analyze', response_model=InsightsResponse)
-async def analyze_financials(query: InsightsQuery):
+async def analyze_financials(query: InsightsQuery, request: Request):
     """Level 1: Financial Health (Preserved Baseline)"""
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = request.headers.get("x-gemini-api-key") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -191,12 +196,12 @@ async def analyze_financials(query: InsightsQuery):
         )
 
 @router.post('/level2', response_model=Level2Response)
-async def analyze_level2_trend_forecast(query: Level2Query):
+async def analyze_level2_trend_forecast(query: Level2Query, request: Request):
     """
     Level 2: Deep Trend & Forecast Engine (CFA Quantitative Methods).
     Grounded in pre-computed series, moving averages, growth rates, and regression projections.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = request.headers.get("x-gemini-api-key") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -226,12 +231,12 @@ async def analyze_level2_trend_forecast(query: Level2Query):
         )
 
 @router.post('/level3', response_model=Level3Response)
-async def analyze_level3_strategic_scenario(query: Level3Query):
+async def analyze_level3_strategic_scenario(query: Level3Query, request: Request):
     """
     Level 3: Strategic & Scenario Analysis (CFA + FRM Risk Framing).
     Grounded in pre-computed What-If scenarios, red flags, concentration metrics, and volatility data.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = request.headers.get("x-gemini-api-key") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

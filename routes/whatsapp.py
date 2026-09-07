@@ -17,22 +17,27 @@ router = APIRouter()
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "meso_secret_verify_token_2026")
 
 @router.get("/webhook")
-async def verify_webhook(
-    hub_mode: str = Query(None, alias="hub.mode"),
-    hub_challenge: str = Query(None, alias="hub.challenge"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token")
-):
+async def verify_webhook(request: Request):
     """
     Meta Webhook Verification Handshake
     Meta calls this GET endpoint when you click 'Verify and Save' in App Dashboard.
+    Query params sent by Meta:
+    hub.mode = 'subscribe'
+    hub.challenge = <integer / string challenge>
+    hub.verify_token = <your verify token>
     """
-    logger.info(f"Verification request: mode={hub_mode}, token={hub_verify_token}")
+    params = request.query_params
+    hub_mode = params.get("hub.mode")
+    hub_challenge = params.get("hub.challenge")
+    hub_verify_token = params.get("hub.verify_token")
+
+    logger.info(f"Verification request: mode={hub_mode}, challenge={hub_challenge}")
     
     if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         logger.info("Webhook successfully verified by Meta!")
-        return PlainTextResponse(content=hub_challenge, status_code=200)
+        return PlainTextResponse(content=str(hub_challenge), status_code=200)
     
-    logger.warning("Verification token mismatch or invalid mode")
+    logger.warning(f"Verification mismatch: got '{hub_verify_token}', expected '{VERIFY_TOKEN}'")
     raise HTTPException(status_code=403, detail="Verification token mismatch")
 
 @router.post("/webhook")

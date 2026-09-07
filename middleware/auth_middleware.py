@@ -15,7 +15,7 @@ async def auth_middleware(request: Request, call_next):
     # In this investor demo phase (single-company prototype), unauthenticated requests are
     # allowed through so demo users can explore without required login ceremonies.
     # When upgrading to multi-tenant production, strict token validation must be enabled here.
-    if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or not supabase:
+    if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or request.url.path.startswith("/api/v1/whatsapp") or not supabase:
         return await call_next(request)
     
     auth_header = request.headers.get("Authorization")

@@ -27,6 +27,7 @@ from routes import compliance
 from routes import ai_entry
 from routes import ai_audit
 from routes import insights
+from routes import whatsapp
 
 # Create the FastAPI application
 app = FastAPI(
@@ -58,6 +59,7 @@ app.include_router(ledger.router, prefix="/api/ledger", tags=["Ledger"])
 app.include_router(ai_entry.router, prefix="/api/ai", tags=["AI"])
 app.include_router(ai_audit.router, prefix="/api/ai", tags=["AI"])
 app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
+app.include_router(whatsapp.router, prefix="/api/v1/whatsapp", tags=["WhatsApp"])
 
 @app.get("/")
 def root():

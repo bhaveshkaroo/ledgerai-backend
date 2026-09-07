@@ -1,0 +1,79 @@
+[
+  {
+    "section_code": "194J(a)",
+    "description": "Professional & Legal Fees",
+    "nature": "Fees for professional or technical services / legal advisory",
+    "rate_individual": 10.0,
+    "rate_company": 10.0,
+    "threshold_single": 0,
+    "threshold_aggregate": 30000,
+    "challan_code": "94J",
+    "keywords": ["legal", "professional", "audit", "lawyer", "advocate", "ca", "chartered accountant", "consultant", "advisory", "doctor", "architect", "valuer", "company secretary", "counsel"]
+  },
+  {
+    "section_code": "194J(b)",
+    "description": "Technical & Royalty Fees",
+    "nature": "Fees for technical services / royalty / IT infrastructure",
+    "rate_individual": 2.0,
+    "rate_company": 2.0,
+    "threshold_single": 0,
+    "threshold_aggregate": 30000,
+    "challan_code": "94J",
+    "keywords": ["aws", "amazon web services", "azure", "cloud", "software", "saas", "technical", "coding", "hosting", "it services", "development", "api", "database"]
+  },
+  {
+    "section_code": "194C",
+    "description": "Works Contract & Contractor",
+    "nature": "Payments to contractors and sub-contractors for works contracts",
+    "rate_individual": 1.0,
+    "rate_company": 2.0,
+    "threshold_single": 30000,
+    "threshold_aggregate": 100000,
+    "challan_code": "94C",
+    "keywords": ["contractor", "sub-contractor", "works", "transport", "freight", "courier", "advertising", "catering", "maintenance", "repair", "fabrication", "labour", "labor", "printing", "housekeeping"]
+  },
+  {
+    "section_code": "194I(a)",
+    "description": "Rent - Plant & Machinery",
+    "nature": "Rent for use of machinery, plant or equipment",
+    "rate_individual": 2.0,
+    "rate_company": 2.0,
+    "threshold_single": 0,
+    "threshold_aggregate": 240000,
+    "challan_code": "94I",
+    "keywords": ["equipment rent", "plant rent", "machinery rent", "server rent", "generator hire", "crane hire", "vehicle hire"]
+  },
+  {
+    "section_code": "194I(b)",
+    "description": "Rent - Land & Building",
+    "nature": "Rent for use of land, building or furniture",
+    "rate_individual": 10.0,
+    "rate_company": 10.0,
+    "threshold_single": 0,
+    "threshold_aggregate": 240000,
+    "challan_code": "94I",
+    "keywords": ["office rent", "building rent", "warehouse rent", "shop rent", "premises rent", "lease", "rent for office", "rent paid", "monthly rent"]
+  },
+  {
+    "section_code": "194H",
+    "description": "Commission & Brokerage",
+    "nature": "Commission or brokerage for services in the course of buying or selling",
+    "rate_individual": 5.0,
+    "rate_company": 5.0,
+    "threshold_single": 0,
+    "threshold_aggregate": 15000,
+    "challan_code": "94H",
+    "keywords": ["commission", "brokerage", "agent", "distributor", "referral", "incentive", "broker"]
+  },
+  {
+    "section_code": "194Q",
+    "description": "Purchase of Goods (High Value)",
+    "nature": "Payment for purchase of goods exceeding threshold",
+    "rate_individual": 0.1,
+    "rate_company": 0.1,
+    "threshold_single": 0,
+    "threshold_aggregate": 5000000,
+    "challan_code": "94Q",
+    "keywords": ["purchase of goods", "material purchase", "stock purchase", "inventory purchase", "bulk raw material"]
+  }
+]

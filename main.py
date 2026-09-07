@@ -28,6 +28,7 @@ from routes import ai_entry
 from routes import ai_audit
 from routes import insights
 from routes import whatsapp
+from routes import tds
 
 # Create the FastAPI application
 app = FastAPI(
@@ -60,6 +61,7 @@ app.include_router(ai_entry.router, prefix="/api/ai", tags=["AI"])
 app.include_router(ai_audit.router, prefix="/api/ai", tags=["AI"])
 app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
 app.include_router(whatsapp.router, prefix="/api/v1/whatsapp", tags=["WhatsApp"])
+app.include_router(tds.router, prefix="/api/tds", tags=["TDS Engine"])
 
 @app.get("/")
 def root():

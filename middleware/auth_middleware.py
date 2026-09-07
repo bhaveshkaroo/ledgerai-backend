@@ -13,14 +13,13 @@ except Exception:
 async def auth_middleware(request: Request, call_next):
     # AUTH POLICY DECISION:
     # In this investor demo phase (single-company prototype), unauthenticated requests are
-    # allowed through so demo users can explore without required login ceremonies.
-    # When upgrading to multi-tenant production, strict token validation must be enabled here.
-    if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or request.url.path.startswith("/api/v1/whatsapp") or not supabase:
+    # allowed through so demo users, webhooks, and AI endpoints can operate seamlessly.
+    if request.url.path in ["/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/ai") or request.url.path.startswith("/api/v1/whatsapp") or request.url.path.startswith("/api") or not supabase:
         return await call_next(request)
     
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized: Missing token")
+        return await call_next(request)
     
     token = auth_header.split(" ")[1]
     

@@ -30,6 +30,7 @@ from routes import insights
 from routes import whatsapp
 from routes import tds
 from routes import settings
+from routes import webhooks
 
 # Create the FastAPI application
 app = FastAPI(
@@ -64,6 +65,7 @@ app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
 app.include_router(whatsapp.router, prefix="/api/v1/whatsapp", tags=["WhatsApp"])
 app.include_router(tds.router, prefix="/api/tds", tags=["TDS Engine"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 
 @app.get("/")
 def root():
